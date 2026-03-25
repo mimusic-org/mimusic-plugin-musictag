@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐标签刮削</title>
+    <link rel="stylesheet" href="/api/v1/plugin/musictag/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 音乐标签刮削</h1>
+        <p class="description">选择歌单进行批量刮削（支持多选）</p>
+        
+        <!-- 歌单选择区域 -->
+        <div class="playlist-section">
+            <div class="playlist-controls">
+                <button id="loadPlaylists" class="btn btn-primary">加载歌单列表</button>
+                <button id="selectAll" class="btn btn-secondary" style="display: none;">全选</button>
+                <button id="deselectAll" class="btn btn-secondary" style="display: none;">取消全选</button>
+            </div>
+            
+            <div class="playlist-selector" id="playlistSelector" style="display: none;">
+                <label class="select-label">选择要刮削的歌单：</label>
+                <div class="playlist-checkbox-list" id="playlistCheckboxList">
+                    <!-- 动态加载歌单选项 -->
+                </div>
+                <div class="selected-count" id="selectedCount">已选择 0 个歌单</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="startScrape" class="btn btn-success" disabled>开始刮削</button>
+            <button id="stopScrape" class="btn btn-danger" style="display: none;">停止刮削</button>
+        </div>
+        
+        <div class="progress-container" id="progressContainer" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText"></div>
+            <div class="progress-detail" id="progressDetail"></div>
+        </div>
+        
+        <div class="results" id="results"></div>
+    </div>
+    <script src="/api/v1/plugin/musictag/static/js/app.js"></script>
+</body>
+</html>

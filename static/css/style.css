@@ -1,0 +1,342 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.description {
+    text-align: center;
+    color: #666;
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+
+.controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5568d3;
+}
+
+.btn-success {
+    background: #48bb78;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #38a169;
+}
+
+.btn-danger {
+    background: #f56565;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #e53e3e;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.progress-container {
+    margin: 20px 0;
+}
+
+.progress-bar {
+    background: #e2e8f0;
+    border-radius: 10px;
+    height: 20px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 10px;
+    color: #666;
+    font-weight: 600;
+}
+
+.progress-detail {
+    text-align: center;
+    margin-top: 8px;
+    color: #999;
+    font-size: 13px;
+    display: none;
+}
+
+.results {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    display: none;
+}
+
+.results.success {
+    background: #c6f6d5;
+    border: 1px solid #9ae6b4;
+    display: block;
+}
+
+.results.error {
+    background: #fed7d7;
+    border: 1px solid #feb2b2;
+    display: block;
+}
+
+.result-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    background: white;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.result-item.success {
+    background: #c6f6d5;
+    border: 1px solid #9ae6b4;
+}
+
+.result-item.error {
+    background: #fed7d7;
+    border: 1px solid #feb2b2;
+}
+
+.result-detail {
+    font-size: 13px;
+    color: #666;
+    margin-top: 8px;
+}
+
+.failed-songs-container {
+    margin-top: 15px;
+    padding: 15px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #feb2b2;
+}
+
+.failed-songs-container h3 {
+    color: #e53e3e;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.failed-songs-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.failed-song-item {
+    padding: 8px 12px;
+    margin: 5px 0;
+    background: #fff5f5;
+    border-left: 3px solid #fc8181;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #742a2a;
+}
+
+.btn-warning {
+    background: #ed8936;
+    color: white;
+}
+
+.btn-warning:hover {
+    background: #dd6b20;
+}
+
+.playlist-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.playlist-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.playlist-selector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.select-label {
+    font-size: 14px;
+    color: #555;
+    font-weight: 600;
+}
+
+.playlist-checkbox-list {
+    width: 100%;
+    max-width: 600px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    background: white;
+    padding: 10px;
+}
+
+.playlist-checkbox-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    margin: 4px 0;
+    background: #f8fafc;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.playlist-checkbox-item:hover {
+    background: #edf2f7;
+}
+
+.playlist-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-right: 12px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.playlist-checkbox-label {
+    flex: 1;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    user-select: none;
+}
+
+.selected-count {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+}
+
+.btn-secondary {
+    background: #718096;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4a5568;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    h1 {
+        font-size: 20px;
+    }
+
+    .description {
+        font-size: 13px;
+        margin-bottom: 20px;
+    }
+
+    .playlist-section {
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .playlist-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .playlist-controls .btn {
+        width: 100%;
+    }
+
+    .playlist-checkbox-list {
+        max-height: 300px;
+    }
+
+    .controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .controls .btn {
+        width: 100%;
+    }
+
+    .progress-bar {
+        height: 16px;
+    }
+
+    .result-item {
+        font-size: 13px;
+    }
+}
