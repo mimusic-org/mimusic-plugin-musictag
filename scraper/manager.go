@@ -6,6 +6,7 @@ package scraper
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -519,8 +520,26 @@ func (m *Manager) getQQLyric(songID string) *SongMetadata {
 		return &SongMetadata{}
 	}
 
-	// QQ 音乐歌词是 base64 编码的，这里简化处理，直接返回
+	// QQ 音乐歌词是 base64 编码的，需要解码
+	lyric := result.Lyric
+	if lyric != "" {
+		// 尝试 StdEncoding 解码
+		decoded, err := base64.StdEncoding.DecodeString(lyric)
+		if err != nil {
+			// 尝试 RawStdEncoding 解码（无 padding）
+			decoded, err = base64.RawStdEncoding.DecodeString(lyric)
+			if err != nil {
+				slog.Warn("QQ 音乐歌词 base64 解码失败，使用原始内容", "songID", songID, "error", err)
+				// 解码失败，降级使用原始内容
+			} else {
+				lyric = string(decoded)
+			}
+		} else {
+			lyric = string(decoded)
+		}
+	}
+
 	return &SongMetadata{
-		Lyric: result.Lyric,
+		Lyric: lyric,
 	}
 }
