@@ -6,26 +6,37 @@ package scraper
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"strings"
 
+	"github.com/mimusic-org/musicsdk"
 	"github.com/mimusic-org/plugin/api/pbplugin"
 	"github.com/mimusic-org/plugin/api/plugin"
-	"github.com/mimusic-org/plugin/pkg/go-plugin-http/http"
 )
 
 // Manager 管理刮削任务
 type Manager struct {
-	currentTask *TaskStatus // 当前任务（WASM 单线程，只支持一个任务）
+	currentTask *TaskStatus        // 当前任务（WASM 单线程，只支持一个任务）
+	registry    *musicsdk.Registry // 音乐平台搜索注册表
 }
 
 // NewManager 创建一个新的刮削管理器
 func NewManager() *Manager {
-	return &Manager{}
+	m := &Manager{
+		registry: musicsdk.NewRegistry(),
+	}
+	// 注册搜索器
+	m.registry.Register(musicsdk.NewWySearcher())
+	m.registry.Register(musicsdk.NewTxSearcher())
+	m.registry.Register(musicsdk.NewKwSearcher())
+	m.registry.Register(musicsdk.NewKgSearcher())
+	// 注册歌词获取器
+	m.registry.RegisterLyricFetcher(musicsdk.NewWyLyricFetcher())
+	m.registry.RegisterLyricFetcher(musicsdk.NewTxLyricFetcher())
+	m.registry.RegisterLyricFetcher(musicsdk.NewKwLyricFetcher())
+	m.registry.RegisterLyricFetcher(musicsdk.NewKgLyricFetcher())
+	return m
 }
 
 // Close 关闭管理器
@@ -49,16 +60,111 @@ func (m *Manager) scrapeWithInfo(ctx context.Context, songInfo SongInfo, searchQ
 		query = fmt.Sprintf("%s %s", songInfo.Title, songInfo.Artist)
 	}
 
-	// 3. 从三个平台搜索
+	// 3. 从各平台搜索
 	var allPlatformSongs []PlatformSong
 
-	// 网易云音乐
-	neteaseSongs := m.searchNetease(query)
-	allPlatformSongs = append(allPlatformSongs, neteaseSongs...)
+	// wy 平台搜索
+	wySearcher, ok := m.registry.Get("wy")
+	if ok {
+		result, err := wySearcher.Search(query, 1, 10)
+		if err != nil {
+			slog.Warn("搜索失败", "source", "wy", "query", query, "error", err)
+		} else {
+			for _, item := range result.List {
+				allPlatformSongs = append(allPlatformSongs, PlatformSong{
+					ID:       fmt.Sprintf("wy_%s", item.MusicID),
+					Title:    item.Name,
+					Artist:   item.Singer,
+					Album:    item.Album,
+					CoverURL: item.Img,
+					Source:   "wy",
+					// 保存原始信息用于歌词获取
+					rawInfo: map[string]interface{}{
+						"musicId": item.MusicID,
+						"songmid": item.Songmid,
+					},
+				})
+			}
+		}
+	}
 
-	// QQ 音乐
-	qqSongs := m.searchQQ(query)
-	allPlatformSongs = append(allPlatformSongs, qqSongs...)
+	// tx 平台搜索
+	txSearcher, ok := m.registry.Get("tx")
+	if ok {
+		result, err := txSearcher.Search(query, 1, 10)
+		if err != nil {
+			slog.Warn("搜索失败", "source", "tx", "query", query, "error", err)
+		} else {
+			for _, item := range result.List {
+				allPlatformSongs = append(allPlatformSongs, PlatformSong{
+					ID:       fmt.Sprintf("tx_%s", item.MusicID),
+					Title:    item.Name,
+					Artist:   item.Singer,
+					Album:    item.Album,
+					CoverURL: item.Img,
+					Source:   "tx",
+					// 保存原始信息用于歌词获取
+					rawInfo: map[string]interface{}{
+						"musicId":     item.MusicID,
+						"songmid":     item.Songmid,
+						"albummid":    item.AlbumMid,
+						"strMediaMid": item.StrMediaMid,
+					},
+				})
+			}
+		}
+	}
+
+	// kw 平台搜索
+	kwSearcher, ok := m.registry.Get("kw")
+	if ok {
+		result, err := kwSearcher.Search(query, 1, 10)
+		if err != nil {
+			slog.Warn("搜索失败", "source", "kw", "query", query, "error", err)
+		} else {
+			for _, item := range result.List {
+				allPlatformSongs = append(allPlatformSongs, PlatformSong{
+					ID:       fmt.Sprintf("kw_%s", item.MusicID),
+					Title:    item.Name,
+					Artist:   item.Singer,
+					Album:    item.Album,
+					CoverURL: item.Img,
+					Source:   "kw",
+					rawInfo: map[string]interface{}{
+						"musicId": item.MusicID,
+						"songmid": item.Songmid,
+					},
+				})
+			}
+		}
+	}
+
+	// kg 平台搜索
+	kgSearcher, ok := m.registry.Get("kg")
+	if ok {
+		result, err := kgSearcher.Search(query, 1, 10)
+		if err != nil {
+			slog.Warn("搜索失败", "source", "kg", "query", query, "error", err)
+		} else {
+			for _, item := range result.List {
+				allPlatformSongs = append(allPlatformSongs, PlatformSong{
+					ID:       fmt.Sprintf("kg_%s", item.MusicID),
+					Title:    item.Name,
+					Artist:   item.Singer,
+					Album:    item.Album,
+					CoverURL: item.Img,
+					Source:   "kg",
+					rawInfo: map[string]interface{}{
+						"musicId":  item.MusicID,
+						"hash":     item.Hash,
+						"name":     item.Name,
+						"singer":   item.Singer,
+						"duration": item.Duration,
+					},
+				})
+			}
+		}
+	}
 
 	if len(allPlatformSongs) == 0 {
 		return &ScrapeResult{
@@ -87,7 +193,7 @@ func (m *Manager) scrapeWithInfo(ctx context.Context, songInfo SongInfo, searchQ
 	}
 
 	// 5. 获取详细信息（歌词等）
-	metadata := m.getSongDetail(bestMatch.ID, bestMatch.Title)
+	metadata := m.getSongDetail(bestMatch)
 
 	if metadata.Title == "" {
 		metadata.Title = bestMatch.Title
@@ -314,232 +420,23 @@ func (m *Manager) updateSongMetadata(ctx context.Context, songID int64, metadata
 	return nil
 }
 
-// searchNetease 网易云音乐搜索
-func (m *Manager) searchNetease(query string) []PlatformSong {
-	// 网易云音乐搜索 API: https://music.163.com/api/search/get
-	url := fmt.Sprintf("https://music.163.com/api/search/get?s=%s&type=1&limit=10", query)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		slog.Warn("网易云音乐搜索失败", "query", query, "error", err)
-		return []PlatformSong{}
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Warn("网易云音乐读取响应失败", "error", err)
-		return []PlatformSong{}
-	}
-
-	// 解析响应
-	var result struct {
-		Result struct {
-			Songs []struct {
-				ID      int64  `json:"id"`
-				Name    string `json:"name"`
-				Artists []struct {
-					Name string `json:"name"`
-				} `json:"artists"`
-				Album struct {
-					Name   string `json:"name"`
-					PicURL string `json:"picUrl"`
-				} `json:"album"`
-			} `json:"songs"`
-		} `json:"result"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		slog.Warn("网易云音乐解析响应失败", "error", err)
-		return []PlatformSong{}
-	}
-
-	songs := make([]PlatformSong, 0, len(result.Result.Songs))
-	for _, song := range result.Result.Songs {
-		artistNames := make([]string, len(song.Artists))
-		for i, artist := range song.Artists {
-			artistNames[i] = artist.Name
-		}
-
-		songs = append(songs, PlatformSong{
-			ID:       fmt.Sprintf("netease_%d", song.ID),
-			Title:    song.Name,
-			Artist:   strings.Join(artistNames, "/"),
-			Album:    song.Album.Name,
-			CoverURL: song.Album.PicURL,
-		})
-	}
-
-	return songs
-}
-
-// searchQQ QQ 音乐搜索
-func (m *Manager) searchQQ(query string) []PlatformSong {
-	// QQ 音乐搜索 API
-	url := fmt.Sprintf("https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=%s&format=json&p=1&n=10", query)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		slog.Warn("QQ 音乐搜索失败", "query", query, "error", err)
-		return []PlatformSong{}
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Warn("QQ 音乐读取响应失败", "error", err)
-		return []PlatformSong{}
-	}
-
-	// 解析响应（QQ 音乐返回 JSONP，需要去除回调函数）
-	jsonStr := strings.TrimPrefix(string(body), "callback(")
-	jsonStr = strings.TrimSuffix(jsonStr, ")")
-
-	var result struct {
-		Data struct {
-			Song struct {
-				List []struct {
-					SongID   int64  `json:"songid"`
-					SongName string `json:"songname"`
-					Singer   []struct {
-						Name string `json:"name"`
-					} `json:"singer"`
-					AlbumName string `json:"albumname"`
-					AlbumMid  string `json:"albummid"`
-				} `json:"list"`
-			} `json:"song"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		slog.Warn("QQ 音乐解析响应失败", "error", err)
-		return []PlatformSong{}
-	}
-
-	songs := make([]PlatformSong, 0, len(result.Data.Song.List))
-	for _, song := range result.Data.Song.List {
-		artistNames := make([]string, len(song.Singer))
-		for i, singer := range song.Singer {
-			artistNames[i] = singer.Name
-		}
-
-		// QQ 音乐封面 URL
-		coverURL := fmt.Sprintf("https://y.gtimg.cn/music/photo_new/T002R300x300M000%s.jpg", song.AlbumMid)
-
-		songs = append(songs, PlatformSong{
-			ID:       fmt.Sprintf("qq_%d", song.SongID),
-			Title:    song.SongName,
-			Artist:   strings.Join(artistNames, "/"),
-			Album:    song.AlbumName,
-			CoverURL: coverURL,
-		})
-	}
-
-	return songs
-}
-
 // getSongDetail 获取歌曲详情（歌词等）
-func (m *Manager) getSongDetail(songID, title string) *SongMetadata {
-	// 根据歌曲 ID 前缀判断平台
-	if strings.HasPrefix(songID, "netease_") {
-		return m.getNeteaseLyric(songID)
-	} else if strings.HasPrefix(songID, "qq_") {
-		return m.getQQLyric(songID)
-	}
-
-	return &SongMetadata{}
-}
-
-// getNeteaseLyric 获取网易云音乐歌词
-func (m *Manager) getNeteaseLyric(songID string) *SongMetadata {
-	// 提取歌曲 ID
-	id := strings.TrimPrefix(songID, "netease_")
-	url := fmt.Sprintf("https://music.163.com/api/song/lyric?id=%s&lv=1", id)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		slog.Warn("网易云音乐获取歌词失败", "songID", songID, "error", err)
-		return &SongMetadata{}
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Warn("网易云音乐读取歌词失败", "error", err)
+func (m *Manager) getSongDetail(song PlatformSong) *SongMetadata {
+	// 根据平台获取歌词
+	source := song.Source
+	fetcher, ok := m.registry.GetLyricFetcher(source)
+	if !ok {
+		slog.Warn("未找到歌词获取器", "source", source)
 		return &SongMetadata{}
 	}
 
-	var result struct {
-		Lrc struct {
-			Lyric string `json:"lyric"`
-		} `json:"lrc"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		slog.Warn("网易云音乐解析歌词失败", "error", err)
+	lyricResult, err := fetcher.GetLyric(song.rawInfo)
+	if err != nil {
+		slog.Warn("获取歌词失败", "source", source, "songID", song.ID, "error", err)
 		return &SongMetadata{}
 	}
 
 	return &SongMetadata{
-		Lyric: result.Lrc.Lyric,
-	}
-}
-
-// getQQLyric 获取 QQ 音乐歌词
-func (m *Manager) getQQLyric(songID string) *SongMetadata {
-	// 提取歌曲 ID
-	id := strings.TrimPrefix(songID, "qq_")
-	url := fmt.Sprintf("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=%s&format=json", id)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return &SongMetadata{}
-	}
-
-	req.Header.Set("Referer", "https://y.qq.com/")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Warn("QQ 音乐获取歌词失败", "songID", songID, "error", err)
-		return &SongMetadata{}
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Warn("QQ 音乐读取歌词失败", "error", err)
-		return &SongMetadata{}
-	}
-
-	var result struct {
-		Lyric string `json:"lyric"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		slog.Warn("QQ 音乐解析歌词失败", "error", err)
-		return &SongMetadata{}
-	}
-
-	// QQ 音乐歌词是 base64 编码的，需要解码
-	lyric := result.Lyric
-	if lyric != "" {
-		// 尝试 StdEncoding 解码
-		decoded, err := base64.StdEncoding.DecodeString(lyric)
-		if err != nil {
-			// 尝试 RawStdEncoding 解码（无 padding）
-			decoded, err = base64.RawStdEncoding.DecodeString(lyric)
-			if err != nil {
-				slog.Warn("QQ 音乐歌词 base64 解码失败，使用原始内容", "songID", songID, "error", err)
-				// 解码失败，降级使用原始内容
-			} else {
-				lyric = string(decoded)
-			}
-		} else {
-			lyric = string(decoded)
-		}
-	}
-
-	return &SongMetadata{
-		Lyric: lyric,
+		Lyric: lyricResult.Lyric,
 	}
 }

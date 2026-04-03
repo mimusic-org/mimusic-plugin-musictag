@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"mimusic-plugin-musictag/scraper"
@@ -16,6 +17,15 @@ import (
 	"github.com/mimusic-org/plugin/api/pbplugin"
 	"github.com/mimusic-org/plugin/api/plugin"
 )
+
+// 用于匹配标题中的序号前缀，如 "01.歌曲名"、"1.歌曲名"、"01-歌曲名" 等
+var titlePrefixPattern = regexp.MustCompile(`^\d+[\.\-\s]+`)
+
+// 用于匹配并移除 YouTube ID，如 [cB7DIIG0ykk]
+var youtubeIDPattern = regexp.MustCompile(`\s*\[[a-zA-Z0-9_-]+\]\s*$`)
+
+// 用于匹配并移除常见的分隔符和多余信息
+var extraInfoPattern = regexp.MustCompile(`\s*[-_]\s*`)
 
 // ScraperHandler 刮削处理器
 type ScraperHandler struct {
@@ -100,9 +110,18 @@ func (h *ScraperHandler) HandleBatchScrape(req *http.Request) (*plugin.RouterRes
 		for _, song := range songsResp.Songs {
 			filePath := song.FilePath
 			fileName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+			// 清理标题中的序号前缀，如 "01.歌曲名" -> "歌曲名"
+			cleanTitle := titlePrefixPattern.ReplaceAllString(fileName, "")
+			// 清理 YouTube ID，如 "歌曲名 [xxx]" -> "歌曲名"
+			cleanTitle = youtubeIDPattern.ReplaceAllString(cleanTitle, "")
+			// 将分隔符替换为空格
+			cleanTitle = extraInfoPattern.ReplaceAllString(cleanTitle, " ")
+			// 清理多余空格
+			cleanTitle = strings.TrimSpace(cleanTitle)
+			slog.Info("清理歌曲标题", "songID", song.ID, "original", fileName, "cleaned", cleanTitle)
 			songMap[song.ID] = scraper.SongInfo{
 				ID:     song.ID,
-				Title:  fileName,
+				Title:  cleanTitle,
 				Artist: song.Artist,
 			}
 		}

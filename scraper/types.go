@@ -57,12 +57,14 @@ type ScrapeResult struct {
 
 // PlatformSong 平台歌曲信息
 type PlatformSong struct {
-	ID       string  `json:"id"`        // 平台歌曲 ID
-	Title    string  `json:"title"`     // 歌曲标题
-	Artist   string  `json:"artist"`    // 艺术家
-	Album    string  `json:"album"`     // 专辑
-	CoverURL string  `json:"cover_url"` // 封面 URL
-	Score    float64 `json:"score"`     // 匹配度评分
+	ID       string                 `json:"id"`        // 平台歌曲 ID
+	Title    string                 `json:"title"`     // 歌曲标题
+	Artist   string                 `json:"artist"`    // 艺术家
+	Album    string                 `json:"album"`     // 专辑
+	CoverURL string                 `json:"cover_url"` // 封面 URL
+	Score    float64                `json:"score"`     // 匹配度评分
+	Source   string                 `json:"source"`    // 平台标识 (wy/tx)
+	rawInfo  map[string]interface{} // 原始平台信息（用于歌词获取）
 }
 
 // BatchScrapeRequest 批量刮削请求
