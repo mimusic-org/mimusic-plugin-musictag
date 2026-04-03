@@ -4,45 +4,102 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音乐标签刮削</title>
+    <link rel="stylesheet" href="/api/v1/plugin/musictag/static/css/fonts.css">
     <link rel="stylesheet" href="/api/v1/plugin/musictag/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>🎵 音乐标签刮削</h1>
-        <p class="description">选择歌单进行批量刮削（支持多选）</p>
-        
-        <!-- 歌单选择区域 -->
-        <div class="playlist-section">
-            <div class="playlist-controls">
-                <button id="loadPlaylists" class="btn btn-primary">加载歌单列表</button>
-                <button id="selectAll" class="btn btn-secondary" style="display: none;">全选</button>
-                <button id="deselectAll" class="btn btn-secondary" style="display: none;">取消全选</button>
-            </div>
-            
-            <div class="playlist-selector" id="playlistSelector" style="display: none;">
-                <label class="select-label">选择要刮削的歌单：</label>
-                <div class="playlist-checkbox-list" id="playlistCheckboxList">
-                    <!-- 动态加载歌单选项 -->
-                </div>
-                <div class="selected-count" id="selectedCount">已选择 0 个歌单</div>
-            </div>
+
+<!-- AppBar -->
+<header class="app-bar">
+    <h1>音乐标签刮削</h1>
+</header>
+
+<div class="container">
+    <!-- 歌单选择卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span class="material-symbols-outlined">queue_music</span>
+            选择歌单
         </div>
-        
-        <div class="controls">
-            <button id="startScrape" class="btn btn-success" disabled>开始刮削</button>
-            <button id="stopScrape" class="btn btn-danger" style="display: none;">停止刮削</button>
+        <div class="toolbar">
+            <button id="loadPlaylists" class="btn-filled">
+                <span class="material-symbols-outlined">refresh</span>
+                加载歌单
+            </button>
+            <button id="selectAllBtn" class="btn-text" style="display:none">全选</button>
+            <button id="deselectAllBtn" class="btn-text" style="display:none">取消全选</button>
+            <span id="selectedCount" class="chip" style="display:none">已选 0 个</span>
         </div>
-        
-        <div class="progress-container" id="progressContainer" style="display: none;">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
+        <div id="playlistContainer" class="playlist-grid"></div>
+    </div>
+
+    <!-- 操作控制卡片 -->
+    <div class="card" id="controlsCard" style="display:none">
+        <div class="toolbar" style="justify-content:center;border-bottom:none">
+            <button id="startBtn" class="btn-filled" disabled>
+                <span class="material-symbols-outlined">auto_fix_high</span>
+                开始刮削
+            </button>
+            <button id="stopBtn" class="btn-filled danger" style="display:none">
+                <span class="material-symbols-outlined">stop</span>
+                停止刮削
+            </button>
+        </div>
+    </div>
+
+    <!-- 进度卡片 -->
+    <div class="card" id="progressCard" style="display:none">
+        <div class="card-header">
+            <span class="material-symbols-outlined">hourglass_top</span>
+            刮削进度
+        </div>
+        <div style="padding:16px 20px">
+            <div class="progress-linear">
+                <div class="progress-linear-fill" id="progressFill" style="width:0%"></div>
             </div>
-            <div class="progress-text" id="progressText"></div>
+            <div class="progress-text" id="progressText">准备中...</div>
             <div class="progress-detail" id="progressDetail"></div>
         </div>
-        
-        <div class="results" id="results"></div>
     </div>
-    <script src="/api/v1/plugin/musictag/static/js/app.js"></script>
+
+    <!-- 结果卡片 -->
+    <div class="card" id="resultsCard" style="display:none">
+        <div class="card-header">
+            <span class="material-symbols-outlined">assessment</span>
+            刮削结果
+        </div>
+        <div style="padding:16px 20px">
+            <div class="stats-row">
+                <div class="stat-card total">
+                    <div class="stat-number" id="statTotal">0</div>
+                    <div class="stat-label">总计</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-number" id="statSuccess">0</div>
+                    <div class="stat-label">成功</div>
+                </div>
+                <div class="stat-card error">
+                    <div class="stat-number" id="statFailed">0</div>
+                    <div class="stat-label">失败</div>
+                </div>
+            </div>
+            <div id="failedSection" style="display:none">
+                <div class="toolbar" style="background:transparent;border-bottom:none;padding:0 0 8px">
+                    <span style="font-weight:500;flex:1">失败歌曲</span>
+                    <button id="retryBtn" class="btn-outlined">
+                        <span class="material-symbols-outlined">refresh</span>
+                        重新刮削失败歌曲
+                    </button>
+                </div>
+                <div id="failedList" class="failed-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Snackbar -->
+<div id="snackbar" class="snackbar"></div>
+
+<script src="/api/v1/plugin/musictag/static/js/app.js"></script>
 </body>
 </html>

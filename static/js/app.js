@@ -1,15 +1,28 @@
 let currentTaskId = null;
 let isScraping = false;
-let loadedPlaylists = []; // 存储加载的歌单列表
+let snackbarTimer = null;
 
-/**
- * 从 localStorage 获取认证 Token
- */
+// ---- 工具函数 ----
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+function showSnackbar(message, type = 'info', duration = 3000) {
+    const el = document.getElementById('snackbar');
+    if (snackbarTimer) clearTimeout(snackbarTimer);
+    el.textContent = message;
+    el.className = `snackbar ${type} show`;
+    snackbarTimer = setTimeout(() => { el.className = 'snackbar'; }, duration);
+}
+
 function getAuthToken() {
     try {
-        var authData = localStorage.getItem('mimusic-auth');
+        const authData = localStorage.getItem('mimusic-auth');
         if (authData) {
-            var auth = JSON.parse(authData);
+            const auth = JSON.parse(authData);
             return auth.accessToken || '';
         }
     } catch (e) {
@@ -18,285 +31,179 @@ function getAuthToken() {
     return '';
 }
 
-/**
- * 获取认证头
- */
 function getAuthHeaders() {
-    var headers = { 'Content-Type': 'application/json' };
-    var token = getAuthToken();
-    if (token) {
-        headers['Authorization'] = 'Bearer ' + token;
-    }
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getAuthToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     return headers;
 }
 
-// 页面加载时检查是否有未完成的任务
-window.addEventListener('DOMContentLoaded', async () => {
-    // 绑定加载歌单按钮事件
-    document.getElementById('loadPlaylists').addEventListener('click', loadPlaylists);
-    
-    // 绑定全选/取消全选按钮事件
-    document.getElementById('selectAll').addEventListener('click', selectAll);
-    document.getElementById('deselectAll').addEventListener('click', deselectAll);
-    
-    try {
-        const response = await fetch('/api/v1/plugin/musictag/api/scrape/status?task_id=current', {
-            headers: getAuthHeaders()
-        });
-        const progress = await response.json();
-        
-        // 如果任务正在运行，恢复 UI 状态并继续轮询
-        if (progress.status === 'running') {
-            currentTaskId = 'current';
-            isScraping = true;
-            
-            const startBtn = document.getElementById('startScrape');
-            const stopBtn = document.getElementById('stopScrape');
-            const progressContainer = document.getElementById('progressContainer');
-            
-            startBtn.disabled = true;
-            startBtn.textContent = '刮削中...';
-            stopBtn.style.display = 'inline-block';
-            progressContainer.style.display = 'block';
-            
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            const progressDetail = document.getElementById('progressDetail');
-            const resultsDiv = document.getElementById('results');
-            
-            pollProgress(currentTaskId, progressFill, progressText, progressDetail, resultsDiv, startBtn, stopBtn);
-        } else if (progress.status === 'completed_with_errors' || (progress.status === 'completed' && progress.failed > 0)) {
-            // 显示上次刮削的结果
-            const resultsDiv = document.getElementById('results');
-            showResultsFromProgress(progress, resultsDiv);
-        }
-    } catch (error) {
-        console.error('获取任务状态失败:', error);
+// ---- 歌单渲染 ----
+
+function renderPlaylists(playlists) {
+    const container = document.getElementById('playlistContainer');
+    if (!playlists || playlists.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+            <span class="material-symbols-outlined">queue_music</span>
+            <p>暂无歌单</p>
+        </div>`;
+        return;
     }
-});
+    container.innerHTML = playlists.map(pl => `
+        <label class="list-item playlist-item">
+            <input type="checkbox" class="playlist-checkbox" value="${pl.id}"
+                style="accent-color:var(--md-primary)" onchange="updateSelectedCount()">
+            <div class="list-item-info">
+                <div class="list-item-title">${escapeHtml(pl.name)}</div>
+                <div class="list-item-subtitle">${pl.song_count || 0} 首歌曲${pl.type === 'radio' ? ' · 电台' : ''}</div>
+            </div>
+        </label>
+    `).join('');
+}
 
-document.getElementById('startScrape').addEventListener('click', startScrape);
-document.getElementById('stopScrape').addEventListener('click', stopScrape);
+function renderFailedSongs(failedSongs) {
+    const container = document.getElementById('failedList');
+    if (!failedSongs || failedSongs.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+    container.innerHTML = failedSongs.map(song => `
+        <div class="failed-item">
+            <span class="material-symbols-outlined" style="color:var(--md-error)">error</span>
+            <div>
+                <div style="font-weight:500;font-size:14px">${escapeHtml(song.title)}</div>
+                <div style="font-size:13px;color:var(--md-on-surface-variant)">${escapeHtml(song.artist || '')}</div>
+            </div>
+        </div>
+    `).join('');
+}
 
-// 加载歌单列表
+// ---- 歌单选择 ----
+
+function selectAll() {
+    document.querySelectorAll('.playlist-checkbox').forEach(cb => { cb.checked = true; });
+    updateSelectedCount();
+}
+
+function deselectAll() {
+    document.querySelectorAll('.playlist-checkbox').forEach(cb => { cb.checked = false; });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checked = document.querySelectorAll('.playlist-checkbox:checked');
+    const count = checked.length;
+    const chip = document.getElementById('selectedCount');
+    chip.textContent = `已选 ${count} 个`;
+    chip.style.display = count > 0 ? '' : 'none';
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) startBtn.disabled = count === 0;
+}
+
+// ---- 加载歌单 ----
+
 async function loadPlaylists() {
     const loadBtn = document.getElementById('loadPlaylists');
-    const playlistSelector = document.getElementById('playlistSelector');
-    const selectAllBtn = document.getElementById('selectAll');
-    const deselectAllBtn = document.getElementById('deselectAll');
-    
     loadBtn.disabled = true;
-    loadBtn.textContent = '加载中...';
-    
+    loadBtn.innerHTML = '<span class="spinner"></span>加载中...';
+
     try {
         const response = await fetch('/api/v1/playlists?limit=100000', {
             headers: getAuthHeaders()
         });
-        
-        if (!response.ok) {
-            throw new Error('加载歌单失败');
-        }
-        
+        if (!response.ok) throw new Error('HTTP ' + response.status);
         const result = await response.json();
-        
-        if (!result.playlists || result.playlists.length === 0) {
-            alert('暂无歌单');
-            loadBtn.disabled = false;
-            loadBtn.textContent = '加载歌单列表';
-            return;
-        }
-        
-        loadedPlaylists = result.playlists;
-        
-        // 清空并填充 checkbox 列表
-        const playlistCheckboxList = document.getElementById('playlistCheckboxList');
-        playlistCheckboxList.innerHTML = '';
-        result.playlists.forEach(playlist => {
-            const checkboxItem = document.createElement('div');
-            checkboxItem.className = 'playlist-checkbox-item';
-            
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = 'playlist-' + playlist.id;
-            checkbox.value = playlist.id;
-            checkbox.className = 'playlist-checkbox';
-            
-            const label = document.createElement('label');
-            label.htmlFor = 'playlist-' + playlist.id;
-            label.className = 'playlist-checkbox-label';
-            label.textContent = playlist.name + (playlist.type === 'radio' ? ' (电台)' : '');
-            
-            checkboxItem.appendChild(checkbox);
-            checkboxItem.appendChild(label);
-            playlistCheckboxList.appendChild(checkboxItem);
-        });
-        
-        // 绑定 checkbox 变化事件
-        const checkboxes = playlistCheckboxList.querySelectorAll('.playlist-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', updateSelectedCount);
-        });
-        
-        // 显示选择器和全选/取消全选按钮
-        playlistSelector.style.display = 'flex';
-        selectAllBtn.style.display = 'inline-block';
-        deselectAllBtn.style.display = 'inline-block';
-        loadBtn.textContent = '重新加载';
-        loadBtn.disabled = false;
-        
-    } catch (error) {
-        alert('加载歌单失败：' + error.message);
-        loadBtn.disabled = false;
-        loadBtn.textContent = '加载歌单列表';
-    }
-}
 
-// 全选
-function selectAll() {
-    const checkboxes = document.querySelectorAll('.playlist-checkbox');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = true;
-    });
-    updateSelectedCount();
-}
+        renderPlaylists(result.playlists || []);
 
-// 取消全选
-function deselectAll() {
-    const checkboxes = document.querySelectorAll('.playlist-checkbox');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    updateSelectedCount();
-}
-
-// 更新已选择歌单数量显示
-function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.playlist-checkbox:checked');
-    const selectedCount = document.getElementById('selectedCount');
-    const startBtn = document.getElementById('startScrape');
-    
-    const count = checkboxes.length;
-    
-    selectedCount.textContent = '已选择 ' + count + ' 个歌单';
-    
-    // 只有选择了歌单才能开始刮削
-    startBtn.disabled = count === 0;
-}
-
-async function startScrape() {
-    if (isScraping) {
-        alert('已有任务正在运行，请先停止当前任务');
-        return;
-    }
-    
-    const checkboxes = document.querySelectorAll('.playlist-checkbox:checked');
-    
-    if (checkboxes.length === 0) {
-        alert('请至少选择一个歌单');
-        return;
-    }
-    
-    const selectedPlaylistIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    
-    const startBtn = document.getElementById('startScrape');
-    const stopBtn = document.getElementById('stopScrape');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressFill = document.getElementById('progressFill');
-    const progressText = document.getElementById('progressText');
-    const progressDetail = document.getElementById('progressDetail');
-    const resultsDiv = document.getElementById('results');
-    
-    // 更新按钮状态
-    isScraping = true;
-    startBtn.disabled = true;
-    startBtn.textContent = '刮削中...';
-    stopBtn.style.display = 'inline-block';
-    progressContainer.style.display = 'block';
-    resultsDiv.style.display = 'none';
-    resultsDiv.className = 'results';
-    
-    try {
-        const response = await fetch('/api/v1/plugin/musictag/api/scrape/batch', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ playlist_ids: selectedPlaylistIds })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // 轮询进度
-            currentTaskId = result.task_id;
-            await pollProgress(currentTaskId, progressFill, progressText, progressDetail, resultsDiv, startBtn, stopBtn);
+        if (result.playlists && result.playlists.length > 0) {
+            document.getElementById('selectAllBtn').style.display = '';
+            document.getElementById('deselectAllBtn').style.display = '';
+            document.getElementById('controlsCard').style.display = '';
+            loadBtn.innerHTML = '<span class="material-symbols-outlined">refresh</span>重新加载';
+            showSnackbar(`已加载 ${result.playlists.length} 个歌单`, 'success');
         } else {
-            showResults('error', '批量刮削失败：' + (result.message || '未知错误'), resultsDiv);
-            resetButtons(startBtn, stopBtn);
+            loadBtn.innerHTML = '<span class="material-symbols-outlined">refresh</span>加载歌单';
+            showSnackbar('暂无歌单', 'info');
         }
     } catch (error) {
-        showResults('error', '请求失败：' + error.message, resultsDiv);
-        resetButtons(startBtn, stopBtn);
+        showSnackbar('加载歌单失败：' + error.message, 'error');
+        loadBtn.innerHTML = '<span class="material-symbols-outlined">refresh</span>加载歌单';
+    } finally {
+        loadBtn.disabled = false;
     }
 }
 
-async function stopScrape() {
-    if (!currentTaskId) {
-        return;
-    }
-    
-    const startBtn = document.getElementById('startScrape');
-    const stopBtn = document.getElementById('stopScrape');
-    
-    try {
-        const response = await fetch('/api/v1/plugin/musictag/api/scrape/stop', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ task_id: currentTaskId })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showResults('error', '已停止刮削', document.getElementById('results'));
-            resetButtons(startBtn, stopBtn);
-            currentTaskId = null;
-            isScraping = false;
-        } else {
-            alert('停止失败：' + (result.message || '未知错误'));
-        }
-    } catch (error) {
-        alert('停止请求失败：' + error.message);
+// ---- 进度更新 ----
+
+function updateProgress(data) {
+    const pct = data.total > 0 ? Math.round(data.current / data.total * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressText').textContent =
+        `${data.current} / ${data.total} (${pct}%) — 成功: ${data.success}，失败: ${data.failed}`;
+    const detailEl = document.getElementById('progressDetail');
+    if (data.current_song) {
+        detailEl.textContent = '正在处理: ' + data.current_song;
+    } else {
+        detailEl.textContent = '';
     }
 }
 
-function resetButtons(startBtn, stopBtn) {
-    startBtn.disabled = false;
-    startBtn.textContent = '开始刮削';
-    stopBtn.style.display = 'none';
-    isScraping = false;
+// ---- 显示结果 ----
+
+function showResults(data) {
+    document.getElementById('statTotal').textContent = data.total || 0;
+    document.getElementById('statSuccess').textContent = data.success || 0;
+    document.getElementById('statFailed').textContent = data.failed || 0;
+    document.getElementById('resultsCard').style.display = '';
+
+    const failedSection = document.getElementById('failedSection');
+    if (data.failed > 0 && data.failed_songs && data.failed_songs.length > 0) {
+        failedSection.style.display = '';
+        renderFailedSongs(data.failed_songs);
+        // 绑定重试按钮
+        const retryBtn = document.getElementById('retryBtn');
+        retryBtn.onclick = () => retryFailedSongs(data.task_id);
+    } else {
+        failedSection.style.display = 'none';
+    }
 }
 
-async function pollProgress(taskId, progressFill, progressText, progressDetail, resultsDiv, startBtn, stopBtn) {
-    const maxAttempts = 200;
+// ---- 轮询进度 ----
+
+async function pollProgress(taskId) {
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const maxAttempts = 600;
     let attempts = 0;
-    
+
     while (attempts < maxAttempts) {
         try {
             const response = await fetch(`/api/v1/plugin/musictag/api/scrape/status?task_id=${taskId}`, {
                 headers: getAuthHeaders()
             });
-            const progress = await response.json();
-            
-            // 检查任务是否结束（完成、失败、已停止或有错误的完成）
-            if (progress.status === 'completed' || progress.status === 'failed' || progress.status === 'stopped' || progress.status === 'completed_with_errors') {
-                updateProgress(progress, progressFill, progressText, progressDetail);
-                showResultsFromProgress(progress, resultsDiv);
+            const data = await response.json();
+
+            updateProgress(data);
+
+            if (data.status === 'completed' || data.status === 'failed' ||
+                data.status === 'stopped' || data.status === 'completed_with_errors') {
+                showResults(data);
                 resetButtons(startBtn, stopBtn);
                 currentTaskId = null;
+                isScraping = false;
+                if (data.status === 'stopped') {
+                    showSnackbar('已停止刮削', 'warning');
+                } else {
+                    const msg = data.failed > 0
+                        ? `刮削完成：成功 ${data.success}，失败 ${data.failed}`
+                        : `刮削完成：成功 ${data.success} 首`;
+                    showSnackbar(msg, data.failed > 0 ? 'warning' : 'success');
+                }
                 break;
             }
-            
-            updateProgress(progress, progressFill, progressText, progressDetail);
-            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await new Promise(r => setTimeout(r, 500));
             attempts++;
         } catch (error) {
             console.error('轮询失败:', error);
@@ -305,125 +212,156 @@ async function pollProgress(taskId, progressFill, progressText, progressDetail, 
     }
 }
 
-function updateProgress(progress, progressFill, progressText, progressDetail) {
-    const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-    progressFill.style.width = percent + '%';
-    
-    // 主进度文本
-    progressText.textContent = `进度：${progress.current}/${progress.total} (${percent}%) | 成功：${progress.success} | 失败：${progress.failed}`;
-    
-    // 详细信息：当前正在处理的歌曲
-    if (progress.current_song) {
-        progressDetail.textContent = `当前处理：${progress.current_song}`;
-        progressDetail.style.display = 'block';
-    } else {
-        progressDetail.style.display = 'none';
-    }
-}
+// ---- 开始刮削 ----
 
-function showResultsFromProgress(progress, resultsDiv) {
-    resultsDiv.style.display = 'block';
-    
-    let html = '';
-    
-    if (progress.success > 0) {
-        html += `<div class="result-item success">✓ 成功刮削 ${progress.success} 首歌曲</div>`;
+async function startScrape() {
+    if (isScraping) {
+        showSnackbar('已有任务正在运行，请先停止', 'warning');
+        return;
     }
-    
-    if (progress.failed > 0) {
-        html += `<div class="result-item error">✗ 失败：${progress.failed} 首</div>`;
+
+    const checkboxes = document.querySelectorAll('.playlist-checkbox:checked');
+    if (checkboxes.length === 0) {
+        showSnackbar('请至少选择一个歌单', 'warning');
+        return;
     }
-    
-    // 显示失败歌曲列表
-    if (progress.failed_songs && progress.failed_songs.length > 0) {
-        html += '<div class="failed-songs-container"><h3>失败歌曲列表</h3><ul class="failed-songs-list">';
-        progress.failed_songs.forEach(song => {
-            html += `<li class="failed-song-item">${escapeHtml(song.title)} - ${escapeHtml(song.artist)}</li>`;
+
+    const selectedPlaylistIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    isScraping = true;
+    startBtn.innerHTML = '<span class="spinner"></span>启动中...';
+    startBtn.disabled = true;
+    stopBtn.style.display = '';
+    document.getElementById('progressCard').style.display = '';
+    document.getElementById('resultsCard').style.display = 'none';
+
+    try {
+        const response = await fetch('/api/v1/plugin/musictag/api/scrape/batch', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ playlist_ids: selectedPlaylistIds })
         });
-        html += '</ul></div>';
-        
-        // 添加重新刮削按钮
-        html += `<button id="retryFailedBtn" class="btn btn-warning" style="margin-top: 10px;">重新刮削失败歌曲</button>`;
-    }
-    
-    if (progress.error) {
-        html += `<div class="result-detail">${escapeHtml(progress.error)}</div>`;
-    }
-    
-    if (progress.success === 0 && progress.failed === 0) {
-        html += `<div class="result-item">ℹ️ 没有找到需要刮削的歌曲</div>`;
-    }
-    
-    resultsDiv.innerHTML = html;
-    resultsDiv.className = 'results ' + (progress.failed > 0 ? 'error' : 'success');
-    
-    // 绑定重新刮削按钮事件
-    const retryBtn = document.getElementById('retryFailedBtn');
-    if (retryBtn) {
-        retryBtn.addEventListener('click', () => retryFailedSongs(progress.task_id));
+        const result = await response.json();
+
+        if (result.success) {
+            currentTaskId = result.task_id;
+            startBtn.innerHTML = '<span class="material-symbols-outlined">auto_fix_high</span>刮削中...';
+            await pollProgress(currentTaskId);
+        } else {
+            showSnackbar('批量刮削失败：' + (result.message || '未知错误'), 'error');
+            resetButtons(startBtn, stopBtn);
+            isScraping = false;
+        }
+    } catch (error) {
+        showSnackbar('请求失败：' + error.message, 'error');
+        resetButtons(startBtn, stopBtn);
+        isScraping = false;
     }
 }
 
-function showResults(type, message, resultsDiv) {
-    resultsDiv.className = 'results ' + type;
-    resultsDiv.innerHTML = `<div class="result-item">${type === 'success' ? '✓' : '✗'} ${escapeHtml(message)}</div>`;
-    resultsDiv.style.display = 'block';
+// ---- 停止刮削 ----
+
+async function stopScrape() {
+    if (!currentTaskId) return;
+
+    try {
+        const response = await fetch('/api/v1/plugin/musictag/api/scrape/stop', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ task_id: currentTaskId })
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showSnackbar('停止失败：' + (result.message || '未知错误'), 'error');
+        }
+    } catch (error) {
+        showSnackbar('停止请求失败：' + error.message, 'error');
+    }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ---- 重置按钮 ----
+
+function resetButtons(startBtn, stopBtn) {
+    startBtn.innerHTML = '<span class="material-symbols-outlined">auto_fix_high</span>开始刮削';
+    startBtn.disabled = document.querySelectorAll('.playlist-checkbox:checked').length === 0;
+    stopBtn.style.display = 'none';
+    isScraping = false;
 }
+
+// ---- 重新刮削失败歌曲 ----
 
 async function retryFailedSongs(taskId) {
-    const retryBtn = document.getElementById('retryFailedBtn');
-    if (retryBtn) {
-        retryBtn.disabled = true;
-        retryBtn.textContent = '重新刮削中...';
-    }
-    
+    const retryBtn = document.getElementById('retryBtn');
+    retryBtn.disabled = true;
+    retryBtn.innerHTML = '<span class="spinner" style="border-top-color:var(--md-primary)"></span>刮削中...';
+
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
     try {
         const response = await fetch('/api/v1/plugin/musictag/api/scrape/retry-failed', {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({ task_id: taskId })
         });
-        
         const result = await response.json();
-        
+
         if (result.success) {
-            // 开始轮询新任务的进度
             currentTaskId = result.task_id;
-            
-            const progressContainer = document.getElementById('progressContainer');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            const progressDetail = document.getElementById('progressDetail');
-            const resultsDiv = document.getElementById('results');
-            const startBtn = document.getElementById('startScrape');
-            const stopBtn = document.getElementById('stopScrape');
-            
             isScraping = true;
+            startBtn.innerHTML = '<span class="material-symbols-outlined">auto_fix_high</span>刮削中...';
             startBtn.disabled = true;
-            startBtn.textContent = '刮削中...';
-            stopBtn.style.display = 'inline-block';
-            progressContainer.style.display = 'block';
-            resultsDiv.style.display = 'none';
-            
-            await pollProgress(currentTaskId, progressFill, progressText, progressDetail, resultsDiv, startBtn, stopBtn);
+            stopBtn.style.display = '';
+            document.getElementById('progressCard').style.display = '';
+            document.getElementById('resultsCard').style.display = 'none';
+            await pollProgress(currentTaskId);
         } else {
-            alert('重新刮削失败：' + (result.message || '未知错误'));
-            if (retryBtn) {
-                retryBtn.disabled = false;
-                retryBtn.textContent = '重新刮削失败歌曲';
-            }
+            showSnackbar('重新刮削失败：' + (result.message || '未知错误'), 'error');
+            retryBtn.disabled = false;
+            retryBtn.innerHTML = '<span class="material-symbols-outlined">refresh</span>重新刮削失败歌曲';
         }
     } catch (error) {
-        alert('重新刮削请求失败：' + error.message);
-        if (retryBtn) {
-            retryBtn.disabled = false;
-            retryBtn.textContent = '重新刮削失败歌曲';
-        }
+        showSnackbar('重新刮削请求失败：' + error.message, 'error');
+        retryBtn.disabled = false;
+        retryBtn.innerHTML = '<span class="material-symbols-outlined">refresh</span>重新刮削失败歌曲';
     }
 }
+
+// ---- 页面初始化 ----
+
+window.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('loadPlaylists').addEventListener('click', loadPlaylists);
+    document.getElementById('selectAllBtn').addEventListener('click', selectAll);
+    document.getElementById('deselectAllBtn').addEventListener('click', deselectAll);
+    document.getElementById('startBtn').addEventListener('click', startScrape);
+    document.getElementById('stopBtn').addEventListener('click', stopScrape);
+
+    // 恢复运行中的任务
+    try {
+        const response = await fetch('/api/v1/plugin/musictag/api/scrape/status?task_id=current', {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+
+        if (data.status === 'running') {
+            currentTaskId = 'current';
+            isScraping = true;
+            document.getElementById('controlsCard').style.display = '';
+            document.getElementById('progressCard').style.display = '';
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            startBtn.innerHTML = '<span class="material-symbols-outlined">auto_fix_high</span>刮削中...';
+            startBtn.disabled = true;
+            stopBtn.style.display = '';
+            await pollProgress(currentTaskId);
+        } else if (data.status === 'completed_with_errors' ||
+            (data.status === 'completed' && (data.success > 0 || data.failed > 0))) {
+            document.getElementById('controlsCard').style.display = '';
+            showResults(data);
+        }
+    } catch (error) {
+        console.error('获取任务状态失败:', error);
+    }
+});
