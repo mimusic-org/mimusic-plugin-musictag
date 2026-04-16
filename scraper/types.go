@@ -52,6 +52,7 @@ type ScrapeRequest struct {
 type ScrapeResult struct {
 	Success  bool          `json:"success"`
 	Message  string        `json:"message"`
+	Source   string        `json:"source,omitempty"` // 匹配平台标识 (wy/tx/kw/kg)
 	Metadata *SongMetadata `json:"metadata,omitempty"`
 }
 

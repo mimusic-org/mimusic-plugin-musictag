@@ -6,10 +6,12 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"log/slog"
 
 	"mimusic-plugin-musictag/handlers"
 	"mimusic-plugin-musictag/scraper"
+	"mimusic-plugin-musictag/storage"
 
 	"github.com/knqyf263/go-plugin/types/known/emptypb"
 	"github.com/mimusic-org/plugin/api/pbplugin"
@@ -25,6 +27,7 @@ type Plugin struct {
 	staticHandler  *plugin.StaticHandler
 	scraperManager *scraper.Manager
 	scraperHandler *handlers.ScraperHandler
+	storage        *storage.Storage
 }
 
 func init() {
@@ -56,11 +59,19 @@ var staticFS embed.FS
 func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*emptypb.Empty, error) {
 	slog.Info("正在初始化音乐标签刮削插件", "version", p.Version)
 
+	// 初始化刮削记录存储
+	var err error
+	p.storage, err = storage.NewStorage("/musictag")
+	if err != nil {
+		slog.Error("初始化刮削记录存储失败", "error", err)
+		return &emptypb.Empty{}, fmt.Errorf("failed to create storage: %w", err)
+	}
+
 	// 初始化管理器
-	p.scraperManager = scraper.NewManager()
+	p.scraperManager = scraper.NewManager(p.storage)
 
 	// 初始化处理器
-	p.scraperHandler = handlers.NewScraperHandler(p.scraperManager)
+	p.scraperHandler = handlers.NewScraperHandler(p.scraperManager, p.storage)
 
 	// 获取路由管理器
 	rm := plugin.GetRouterManager()
@@ -69,11 +80,12 @@ func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*empt
 	p.staticHandler = plugin.NewStaticHandler(staticFS, "/musictag", rm, ctx)
 
 	// API 接口（需要认证）
-	// 注册路由（使用 EntryPath，不需要 /api/v1/plugin/ 前缀）
 	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/batch", p.scraperHandler.HandleBatchScrape, true)
 	rm.RegisterRouter(ctx, "GET", "/musictag/api/scrape/status", p.scraperHandler.HandleGetStatus, true)
 	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/stop", p.scraperHandler.HandleStopScrape, true)
 	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/retry-failed", p.scraperHandler.HandleRetryFailed, true)
+	rm.RegisterRouter(ctx, "POST", "/musictag/api/songs", p.scraperHandler.HandleGetSongs, true)
+	rm.RegisterRouter(ctx, "DELETE", "/musictag/api/scrape/records", p.scraperHandler.HandleClearRecords, true)
 
 	slog.Info("音乐标签刮削插件路由注册完成")
 	return &emptypb.Empty{}, nil

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"mimusic-plugin-musictag/storage"
+
 	"github.com/mimusic-org/musicsdk"
 	"github.com/mimusic-org/plugin/api/pbplugin"
 	"github.com/mimusic-org/plugin/api/plugin"
@@ -19,12 +21,14 @@ import (
 type Manager struct {
 	currentTask *TaskStatus        // 当前任务（WASM 单线程，只支持一个任务）
 	registry    *musicsdk.Registry // 音乐平台搜索注册表
+	storage     *storage.Storage   // 刮削记录持久化存储
 }
 
 // NewManager 创建一个新的刮削管理器
-func NewManager() *Manager {
+func NewManager(store *storage.Storage) *Manager {
 	m := &Manager{
 		registry: musicsdk.NewRegistry(),
+		storage:  store,
 	}
 	// 注册搜索器
 	m.registry.Register(musicsdk.NewWySearcher())
@@ -224,6 +228,7 @@ func (m *Manager) scrapeWithInfo(ctx context.Context, songInfo SongInfo, searchQ
 	return &ScrapeResult{
 		Success:  true,
 		Message:  "刮削成功",
+		Source:   bestMatch.Source,
 		Metadata: metadata,
 	}
 }
@@ -290,11 +295,19 @@ func (m *Manager) processNextSong() {
 		if result.Metadata != nil && result.Metadata.Title != "" {
 			m.currentTask.CurrentSong = result.Metadata.Title
 		}
+		// 记录刮削成功
+		if m.storage != nil {
+			m.storage.RecordScrape(songInfo.ID, true, result.Source)
+		}
 	} else {
 		m.currentTask.Failed++
 		// 记录失败的歌曲
 		m.currentTask.FailedSongs = append(m.currentTask.FailedSongs, songInfo)
 		slog.Warn("刮削失败", "songID", songInfo.ID, "error", result.Message)
+		// 记录刮削失败
+		if m.storage != nil {
+			m.storage.RecordScrape(songInfo.ID, false, "")
+		}
 	}
 
 	// 注册下一个定时器，继续处理下一首
