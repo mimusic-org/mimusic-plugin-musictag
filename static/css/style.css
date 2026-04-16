@@ -486,6 +486,10 @@ body {
     background: var(--md-surface-2);
 }
 
+.type-filter-tabs {
+    padding-top: 0;
+}
+
 .filter-tab .badge {
     margin-left: 4px;
     font-size: 10px;

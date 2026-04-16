@@ -298,6 +298,7 @@ func (h *ScraperHandler) HandleRetryFailed(req *http.Request) (*plugin.RouterRes
 // SongWithStatus 带刮削状态的歌曲信息
 type SongWithStatus struct {
 	ID           int64  `json:"id"`
+	Type         string `json:"type"`
 	Title        string `json:"title"`
 	Artist       string `json:"artist"`
 	Album        string `json:"album"`
@@ -348,6 +349,7 @@ func (h *ScraperHandler) HandleGetSongs(req *http.Request) (*plugin.RouterRespon
 		var songsResp struct {
 			Songs []struct {
 				ID       int64  `json:"id"`
+				Type     string `json:"type"`
 				Title    string `json:"title"`
 				Artist   string `json:"artist"`
 				Album    string `json:"album"`
@@ -371,6 +373,7 @@ func (h *ScraperHandler) HandleGetSongs(req *http.Request) (*plugin.RouterRespon
 
 			songWithStatus := &SongWithStatus{
 				ID:     song.ID,
+				Type:   song.Type,
 				Title:  title,
 				Artist: song.Artist,
 				Album:  song.Album,
