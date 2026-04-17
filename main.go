@@ -47,7 +47,6 @@ func (p *Plugin) GetPluginInfo(ctx context.Context, request *emptypb.Empty) (*pb
 			Description: "从其他平台提取歌曲元数据（标题、专辑、艺术家、歌词、封面）",
 			Author:      "MiMusic Team",
 			Homepage:    "https://github.com/mimusic-org/mimusic",
-			EntryPath:   "/musictag",
 		},
 	}, nil
 }
