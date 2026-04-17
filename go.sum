@@ -4,8 +4,8 @@ github.com/knqyf263/go-plugin v0.9.0 h1:CQs2+lOPIlkZVtcb835ZYDEoyyWJWLbSTWeCs0Ew
 github.com/knqyf263/go-plugin v0.9.0/go.mod h1:2z5lCO1/pez6qGo8CvCxSlBFSEat4MEp1DrnA+f7w8Q=
 github.com/mimusic-org/musicsdk v1.0.3 h1:k74/f+tJoCYIXJCnGRUd3eZd2ciouvJ1RDZPM5JPF6Q=
 github.com/mimusic-org/musicsdk v1.0.3/go.mod h1:sSCTULR3In490I5yFH5It3HBe99CbsWlqUlBjb6hkd0=
-github.com/mimusic-org/plugin v0.1.6 h1:pj4BabsjbWCq4gLBOndks0JzLCAbzBMMDtn6z+pwHJc=
-github.com/mimusic-org/plugin v0.1.6/go.mod h1:CNpZO6qjGn9ND+4K/Qr/Wue02qFSz0mff14bGjV12R4=
+github.com/mimusic-org/plugin v0.1.7 h1:5sM6s2t7PUF2zORI+w/sKxn0mF4qJCD58jRviAmdCW0=
+github.com/mimusic-org/plugin v0.1.7/go.mod h1:CNpZO6qjGn9ND+4K/Qr/Wue02qFSz0mff14bGjV12R4=
 github.com/mimusic-org/plugin/pkg/go-plugin-http v0.0.0-20260417035450-0b166733a3ca h1:BL3xGm5KiVooUxTUAePOEgYRgZRiwHOAy9qZTfdBncM=
 github.com/mimusic-org/plugin/pkg/go-plugin-http v0.0.0-20260417035450-0b166733a3ca/go.mod h1:xz9yBOa1LDq/kwm/l9zM65M1vW7Jex0wFws7lPLzYaI=
 github.com/tetratelabs/wazero v1.11.0 h1:+gKemEuKCTevU4d7ZTzlsvgd1uaToIDtlQlmNbwqYhA=
