@@ -61,7 +61,7 @@ func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*empt
 
 	// 初始化刮削记录存储
 	var err error
-	p.storage, err = storage.NewStorage("/musictag")
+	p.storage, err = storage.NewStorage("/")
 	if err != nil {
 		slog.Error("初始化刮削记录存储失败", "error", err)
 		return &emptypb.Empty{}, fmt.Errorf("failed to create storage: %w", err)
@@ -77,15 +77,15 @@ func (p *Plugin) Init(ctx context.Context, request *pbplugin.InitRequest) (*empt
 	rm := plugin.GetRouterManager()
 
 	// 初始化处理器（静态文件处理器需要 rm 来注册路由）
-	p.staticHandler = plugin.NewStaticHandler(staticFS, "/musictag", rm, ctx)
+	p.staticHandler = plugin.NewStaticHandler(staticFS, rm, ctx)
 
 	// API 接口（需要认证）
-	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/batch", p.scraperHandler.HandleBatchScrape, true)
-	rm.RegisterRouter(ctx, "GET", "/musictag/api/scrape/status", p.scraperHandler.HandleGetStatus, true)
-	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/stop", p.scraperHandler.HandleStopScrape, true)
-	rm.RegisterRouter(ctx, "POST", "/musictag/api/scrape/retry-failed", p.scraperHandler.HandleRetryFailed, true)
-	rm.RegisterRouter(ctx, "POST", "/musictag/api/songs", p.scraperHandler.HandleGetSongs, true)
-	rm.RegisterRouter(ctx, "DELETE", "/musictag/api/scrape/records", p.scraperHandler.HandleClearRecords, true)
+	rm.RegisterRouter(ctx, "POST", "/api/scrape/batch", p.scraperHandler.HandleBatchScrape, true)
+	rm.RegisterRouter(ctx, "GET", "/api/scrape/status", p.scraperHandler.HandleGetStatus, true)
+	rm.RegisterRouter(ctx, "POST", "/api/scrape/stop", p.scraperHandler.HandleStopScrape, true)
+	rm.RegisterRouter(ctx, "POST", "/api/scrape/retry-failed", p.scraperHandler.HandleRetryFailed, true)
+	rm.RegisterRouter(ctx, "POST", "/api/songs", p.scraperHandler.HandleGetSongs, true)
+	rm.RegisterRouter(ctx, "DELETE", "/api/scrape/records", p.scraperHandler.HandleClearRecords, true)
 
 	slog.Info("音乐标签刮削插件路由注册完成")
 	return &emptypb.Empty{}, nil
