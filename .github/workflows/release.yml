@@ -105,23 +105,24 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           DOWNLOAD_URL="${{ steps.create_release.outputs.file_url }}"
           REPO="mimusic-org/plugins"
-          JSON_CONTENT=$(echo -n "{\"version\":\"${VERSION}\",\"download_url\":\"${DOWNLOAD_URL}\"}" | jq '.')
-          ENCODED_CONTENT=$(echo -n "$JSON_CONTENT" | base64 -w 0)
+          ENCODED_CONTENT=$(jq -cn --arg v "$VERSION" --arg u "$DOWNLOAD_URL" \
+            '{version: $v, download_url: $u}' | base64 -w 0)
 
           # 获取现有文件的 SHA（如果存在）
           EXISTING_SHA=$(gh api "repos/${REPO}/contents/musictag.json" --jq '.sha' 2>/dev/null || echo "")
 
-          # 构建请求体
+          # 构建并推送请求体
           if [ -n "$EXISTING_SHA" ]; then
-            REQUEST_BODY="{\"message\":\"chore: update musictag.json to v${VERSION}\",\"content\":\"${ENCODED_CONTENT}\",\"sha\":\"${EXISTING_SHA}\"}"
+            jq -cn --arg msg "chore: update musictag.json to v${VERSION}" \
+              --arg content "$ENCODED_CONTENT" --arg sha "$EXISTING_SHA" \
+              '{message: $msg, content: $content, sha: $sha}' | \
+              gh api "repos/${REPO}/contents/musictag.json" --method PUT --input -
           else
-            REQUEST_BODY="{\"message\":\"chore: add musictag.json v${VERSION}\",\"content\":\"${ENCODED_CONTENT}\"}"
+            jq -cn --arg msg "chore: add musictag.json v${VERSION}" \
+              --arg content "$ENCODED_CONTENT" \
+              '{message: $msg, content: $content}' | \
+              gh api "repos/${REPO}/contents/musictag.json" --method PUT --input -
           fi
-
-          # 推送文件
-          echo "$REQUEST_BODY" | gh api "repos/${REPO}/contents/musictag.json" \
-            --method PUT \
-            --input -
           echo "Pushed musictag.json to ${REPO}"
 
       - name: Post comment to mimusic issue
