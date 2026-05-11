@@ -32,7 +32,7 @@ type Plugin struct {
 
 func init() {
 	plugin.RegisterPlugin(&Plugin{
-		Version: "2026.5.6",
+		Version: "2026.5.11",
 	})
 }
 
